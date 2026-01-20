@@ -61,15 +61,18 @@ def _resolve_section(section: str) -> Path | None:
 
 
 @mcp.tool()
-def load_docs(section: str = "") -> str:
+def load_docs(section: str = "", offset: int = 0, limit: int | None = None) -> str:
     """Load a documentation section.
 
     Args:
         section: Path to doc file (e.g. "guide" or "api/endpoints.md").
                  Empty returns INDEX.md if present, otherwise lists available sections.
+        offset: Line number to start from (0-based, default 0).
+        limit: Number of lines to return (default: all remaining lines).
 
     Returns:
         The documentation content or list of available sections.
+        When using offset/limit, includes line numbers and file metadata.
     """
     section = section.strip()
 
@@ -78,7 +81,8 @@ def load_docs(section: str = "") -> str:
         # Check for INDEX.md
         index_path = DOCS_DIR / "INDEX.md"
         if index_path.exists():
-            return index_path.read_text(encoding="utf-8")
+            content = index_path.read_text(encoding="utf-8")
+            return _format_content(content, "INDEX.md", offset, limit)
         # Otherwise list available docs
         docs = _list_docs()
         if not docs:
@@ -93,7 +97,38 @@ def load_docs(section: str = "") -> str:
             f"- {d}" for d in docs
         )
 
-    return path.read_text(encoding="utf-8")
+    content = path.read_text(encoding="utf-8")
+    return _format_content(content, section, offset, limit)
+
+
+def _format_content(
+    content: str, filename: str, offset: int = 0, limit: int | None = None
+) -> str:
+    """Format content with optional line range and line numbers."""
+    lines = content.splitlines()
+    total_lines = len(lines)
+
+    # No range requested - return raw content
+    if offset == 0 and limit is None:
+        return content
+
+    # Apply range
+    end = total_lines if limit is None else min(offset + limit, total_lines)
+    selected = lines[offset:end]
+
+    # Format with line numbers
+    numbered = []
+    for i, line in enumerate(selected, start=offset + 1):
+        numbered.append(f"{i:4d}\t{line}")
+
+    result = "\n".join(numbered)
+
+    # Add metadata header
+    header = f"[{filename}] lines {offset + 1}-{end} of {total_lines}"
+    if end < total_lines:
+        header += f" ({total_lines - end} more lines)"
+
+    return f"{header}\n{result}"
 
 
 @mcp.tool()
