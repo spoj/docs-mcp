@@ -1,6 +1,7 @@
 """Generic Docs MCP Server - Streamable HTTP transport."""
 
 import os
+import re
 from pathlib import Path
 
 import uvicorn
@@ -93,6 +94,65 @@ def load_docs(section: str = "") -> str:
         )
 
     return path.read_text(encoding="utf-8")
+
+
+@mcp.tool()
+def grep_docs(pattern: str, include: str = "*.md") -> str:
+    """Search documentation content using regex.
+
+    Args:
+        pattern: Regex pattern to search for (e.g. "error.*handling", "def\\s+\\w+").
+        include: Glob pattern to filter files (default "*.md", e.g. "api/*.md").
+
+    Returns:
+        Matching file paths with line numbers and content, sorted by file path.
+    """
+    if not DOCS_DIR.exists():
+        return "No documentation directory found."
+
+    try:
+        regex = re.compile(pattern, re.IGNORECASE)
+    except re.error as e:
+        return f"Invalid regex pattern: {e}"
+
+    # Find matching files
+    matches: list[tuple[str, int, str]] = []  # (file, line_num, line_content)
+
+    for path in sorted(DOCS_DIR.rglob(include)):
+        if not path.is_file():
+            continue
+
+        # Security: ensure within DOCS_DIR
+        try:
+            rel_path = path.relative_to(DOCS_DIR)
+        except ValueError:
+            continue
+
+        try:
+            content = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+
+        for line_num, line in enumerate(content.splitlines(), start=1):
+            if regex.search(line):
+                matches.append((str(rel_path), line_num, line.strip()))
+
+    if not matches:
+        return f"No matches found for pattern '{pattern}' in {include}"
+
+    # Format output like OpenCode grep: file:line_num:content
+    results = []
+    for file, line_num, content in matches[:100]:  # Limit to 100 matches
+        # Truncate long lines
+        if len(content) > 200:
+            content = content[:200] + "..."
+        results.append(f"{file}:{line_num}: {content}")
+
+    output = "\n".join(results)
+    if len(matches) > 100:
+        output += f"\n\n... and {len(matches) - 100} more matches"
+
+    return output
 
 
 # --- Auth middleware ---
