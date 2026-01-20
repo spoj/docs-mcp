@@ -1,0 +1,17 @@
+[project]
+name = "docs-mcp"
+version = "0.1.0"
+description = "Generic documentation MCP server with streamable HTTP transport"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp[cli]>=1.0.0",
+    "uvicorn>=0.32.0",
+]
+
+[project.scripts]
+docs-mcp = "docs_mcp.server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
